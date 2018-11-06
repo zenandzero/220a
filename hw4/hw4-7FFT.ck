@@ -12,7 +12,7 @@ fft =^ RMS rms => blackhole;
 
 // add a sine to sonify the analysis output
 SinOsc s => dac;
-s.gain(5.0);
+s.gain(10.0);
 
 // set parameters
 1024 => fft.size;
