@@ -1,10 +1,7 @@
 public class Gamelan
 {
     // *** Pentatonic Javanese "Salendro" scale in MIDI (D#2, F2, G2, A#2, C3)
-    //[39, 41, 43, 46, 48] @=> int salendro[];
-    
-    // *** Pentatonic scale tuned to our recordings in MIDI (D2, F2, G2, A2, C3)
-    [38, 41, 43, 45, 48] @=> int salendro[];
+    [39, 41, 43, 46, 48] @=> int salendro[];
     
     Gain patch => dac;
     
