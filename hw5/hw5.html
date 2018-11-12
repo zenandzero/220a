@@ -1,0 +1,55 @@
+
+<!--
+
+developed by Chris Chafe for Music 220a using code that is in 
+https://cdn.rawgit.com/google/songbird/master/examples/panner-node-vs-songbird.html
+which has this license:
+
+  Copyright 2017 Google Inc. All Rights Reserved.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HW5</title>
+</head>
+<body>
+  <h1>Homework 5: Gametrack Gamelan</h1>
+  <h2>Overview</h2>
+  <p>
+    The main idea is to play a game of call and response with ChucK. I play something on the guitar and a response is generated. In this case I played a very liberal interpretation of the first 14 bars of Davidovsky's Synchronism No. 10 and recorded the live output of both the guitar and ChucK. I sight read through the piece and kept take #10 with no editing, so take the interpretation with a grain of salt :-)
+  </p>
+
+  <p>
+    When I'm playing, ChucK latches the last pitch I played (as determined by FFT). Our control loop checks for ambient noise falling below a certain level. When it does, this is its queue to begin a response. When I stop playing, the response begins with a sequence of pitches based on the latched fundamental pitch. We sample from a logistic map to determine the duration of each note played. We introduce some further modulation by randomly changing the fundamental to some other pitch class.
+  </p>
+
+    <p>
+      I reused the FM Instrument from the last homework to generate some new sounds.
+  </p>
+
+<audio controls="">
+  <source src="hw4/synchronism.wav" type="audio/mp3">
+    </audio>
+
+
+  <h2>Files</h2>
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw4/synchronism.ck">synchronism.ck</a></li>
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw4/instrument.ck">instrument.ck</a></li>
+
+<img src="hw4/synchronism.jpeg">
+
+</body>
+</html>
+
