@@ -23,6 +23,7 @@ spork ~ print();
 
 200 => int basis;
 0.0013 => float velocityThreshold;
+(velocityThreshold * 0.1) => float velocityPeak;
 
 // *** Main variables
 
@@ -76,8 +77,6 @@ fun void gametrak()
     }
 }
 
-g.strike(3, 3);
-
 // Control loop...
 while(true){
     // Angle of attack
@@ -86,9 +85,9 @@ while(true){
     // Convert from radians to degrees
     Math.fabs(gtXYAngle * (180 / Math.PI)) => gtXYAngle;
     
+    // Compute velocity of attack
     Math.pow((gtAxis[0] - gtAxisLast[0]), 2) + Math.pow((gtAxis[1] - gtAxisLast[1]), 2) => distance;
     Math.sqrt(distance) => distance;
-    
     distance / basis => velocity;
     
     // Strike
@@ -104,8 +103,10 @@ while(true){
         else if (gtAxis[0] < 0 && gtAxis[1] < 0) { 1 => octave; }
         else { <<< "Never reach here" >>>; }
         
-        <<< "Striking", pitch, "at octave ", octave >>>;
-        g.strike(pitch, octave);
+        // Normalize velocity
+        (velocity - velocityThreshold) / velocityPeak => float normalized;
+        <<< "Striking", pitch, "at octave", octave, "with velocity", normalized >>>;
+        g.strike(pitch, octave, normalized);
     }
     
     1::samp => now;

@@ -6,8 +6,10 @@ public class Gamelan
     // *** Pentatonic scale tuned to our recordings in MIDI (D2, F2, G2, A2, C3)
     [38, 41, 43, 45, 48] @=> int salendro[];
     
+    Gain patch => dac;
+    
     // *** Model gamelan reverberation 
-    JCRev rev => dac;
+    JCRev rev => patch;
     
     0.1 => rev.mix;
         
@@ -54,10 +56,12 @@ public class Gamelan
     Std.mtof(38) => r2m.freq;
     Std.mtof(55) => r1m.freq;
     
-    fun void strike(int degree, int octave) {        
+    fun void strike(int degree, int octave, float velocity) {  
         Std.mtof(salendro[degree]) * Math.pow(2, octave) + deviations[octave][degree] => float freq;
-                
+        
         freq => r1c.freq => r2c.freq;
+        
+        velocity => patch.gain;
         
         a1.keyOn();
         a2.keyOn();
