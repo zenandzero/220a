@@ -7,54 +7,78 @@ spork ~ print();
 
 // *** Constants
 
-0.05 => float accelerationPeak;
-0.01 => float threshold;
+0.4 => float velocityPeak;
+0.2 => float threshold;
+200::ms => dur minDiff;
 
 // *** Main variables
-
-float acceleration;
-float velocityLast;
 
 float gtXYAngle;
 float velocity;
 float distance;
-float gtAxisLast[6];
-float gtAxis[6];
-SinOsc axis[6];
+// sentinel variable to tell us whether or not we've processed latest Hid events
+int processed;
+time lastStrike;
 
-for( 0 => int i; i < 6; i++ ) {
-    axis[i] => blackhole;
-    axis[i].freq( 0.2 / (i+1)$float);
+// *** Gametrak handling
+
+class GameTrak {
+    time lastTime;
+    time currTime;
+    
+    float lastAxis[6];
+    float axis[6];
 }
 
-fun void print() {
-    while(true) {
-        //<<< "axes:", gtAxis[0],gtAxis[1],gtAxis[2], gtAxis[3],gtAxis[4],gtAxis[5] >>>;
-       // <<< gtXYAngle >>>;
-            //<<< velocity >>>;
-        100::ms => now;
+GameTrak gt;
+
+// HID objects
+Hid trak;
+HidMsg msg;
+
+0 => int device;
+if( !trak.openJoystick( device ) ) me.exit();
+
+<<< "joystick '" + trak.name() + "' ready", "" >>>;
+
+fun void gametrak() {
+    while (true) {
+        trak => now;
+        0 => processed;
+        // messages received
+        while( trak.recv( msg ) ) {
+            // joystick axis motion
+            if( msg.isAxisMotion() ) {            
+                // check which
+                if( msg.which >= 0 && msg.which < 6 ) {
+                    // check if fresh
+                    if( now > gt.currTime ) {
+                        // time stamp
+                        gt.currTime => gt.lastTime;
+                        // set
+                        now => gt.currTime;
+                    }
+                    
+                    // save last
+                    gt.axis[msg.which] => gt.lastAxis[msg.which];
+                    // the z axes map to [0,1], others map to [-1,1]
+                    if( msg.which != 2 && msg.which != 5 ) {
+                        msg.axisPosition => gt.axis[msg.which];
+                    } else {
+                        1 - ((msg.axisPosition + 1) / 2) => gt.axis[msg.which];
+                        if( gt.axis[msg.which] < 0 ) 0 => gt.axis[msg.which];
+                    }
+                }
+            }
+        }
     }
 }
 
-// 3-axis gametrack simulation
-fun void gametrak() {
+
+fun void print() {
     while(true) {
-        // wait on HidIn as event
-        200::ms => now;
-        for(0 => int which; which < 6; which++) {
-            // Save last
-            gtAxis[which] => gtAxisLast[which];
-   
-            axis[which].last() => float axisPosition;
-            
-            // the z axes map to [0,1], others map to [-1,1]
-            if( which != 2 && which != 5 ) {
-                axisPosition => gtAxis[which];
-            } else {
-                1 - ((axisPosition + 1) / 2) => gtAxis[which];
-                if( gtAxis[which] < 0 ) 0 => gtAxis[which];
-            }
-        }
+        //<<< velocity >>>;
+        100::ms => now;
     }
 }
 
@@ -91,30 +115,28 @@ fun int octave(float x, float y) {
     return octave;
 }
 
-fun float calculateAcceleration() {
-    // Remember last value
-    velocity => velocityLast;
-    
+fun float calculateVelocity() {
     // Compute distance travelled
-    Math.pow((gtAxis[0] - gtAxisLast[0]), 2) + Math.pow((gtAxis[1] - gtAxisLast[1]), 2) => distance;
+    Math.pow((gt.axis[0] - gt.lastAxis[0]), 2) + Math.pow((gt.axis[1] - gt.lastAxis[1]), 2) => distance;
     
     // Squint and call that velocity
     Math.sqrt(distance) => velocity;
-    velocityLast - velocity => acceleration;
 }
 
 // Main control loop
 while(true){
-    calculateAcceleration();
+    calculateVelocity();
 
-    acceleration / accelerationPeak => float gain;
-    <<< acceleration, gain >>>;
+    velocity / velocityPeak => float gain;
 
-    // Strike
-    if (gain > threshold) {
-        <<< "Striking" >>>;
-        pitch(gtAxis[0], gtAxis[1]) => int pitch;
-        octave(gtAxis[0], gtAxis[1]) => int octave;
+     if (now - lastStrike >= minDiff && !processed && velocity > threshold) {
+        now => lastStrike;
+        1 => processed;
+        pitch(gt.axis[0], gt.axis[1]) => int pitch;
+        octave(gt.axis[3], gt.axis[4]) => int octave;
+         
+        <<< pitch, octave >>>;
+         
         g.strike(pitch, octave, gain);
     }
     
