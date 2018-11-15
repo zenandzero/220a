@@ -1,4 +1,5 @@
 
+
 <!--
 
 developed by Chris Chafe for Music 220a using code that is in 
@@ -28,28 +29,30 @@ which has this license:
   <h1>Homework 5: Gametrack Gamelan</h1>
   <h2>Overview</h2>
   <p>
-    The main idea is to play a game of call and response with ChucK. I play something on the guitar and a response is generated. In this case I played a very liberal interpretation of the first 14 bars of Davidovsky's Synchronism No. 10 and recorded the live output of both the guitar and ChucK. I sight read through the piece and kept take #10 with no editing, so take the interpretation with a grain of salt :-)
+    I built a Gamelan-inspired instrument using a Gametrak controller. The principle idea was to keep the controls as simple and intuitive as possible. To this effect the left axes control the pitch (in a pentatonic scale) and the right axes control the octave of the pitch (across four octaves). The velocity of attack (the gain of our instrument) is controlled by the velocity towards the pitch on the left controller.
   </p>
 
   <p>
-    When I'm playing, ChucK latches the last pitch I played (as determined by FFT). Our control loop checks for ambient noise falling below a certain level. When it does, this is its queue to begin a response. When I stop playing, the response begins with a sequence of pitches based on the latched fundamental pitch. We sample from a logistic map to determine the duration of each note played. We introduce some further modulation by randomly changing the fundamental to some other pitch class.
+    One of the main challenges was properly tuning our instrument to something that played comfortably (and sounded good). In order to achieve this, we introduce hysterisis by requiring that a minimum time has elapsed before we re-strike the Gamelan in response to input. We only evaluate pitch and octave if we have new HID events, and we also require that the velocity exceed some threshold. It really feels like you're hitting a Gamelan!
   </p>
 
-    <p>
-      I reused the FM Instrument from the last homework to generate some new sounds.
+  <h2>Pitch Controls</h2>
+  <p>
+  <img src="hw5/pitch.jpg" width="50%" height="50%">
   </p>
 
-<audio controls="">
-  <source src="hw4/synchronism.wav" type="audio/mp3">
-    </audio>
+  <h2>Octave Controls</h2>
+  <p>
+  <img src="hw5/octave.jpg" width="50%" height="50%">
+  </p>
 
+  <audio controls=""> <source src="hw5/gametrack_gamelan.wav" type="audio/mp3"> </audio>
 
   <h2>Files</h2>
-<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw4/synchronism.ck">synchronism.ck</a></li>
-<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw4/instrument.ck">instrument.ck</a></li>
-
-<img src="hw4/synchronism.jpeg">
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw5/controller.ck">controller.ck</a></li>
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw5/gamelan.ck">gamelan.ck</a></li>
 
 </body>
 </html>
+
 
