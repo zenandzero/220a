@@ -1,112 +1,143 @@
-// chuck fakeGametrak.ck
-
-// fake data from SinOscs
-
-// SawOsc through resonator, parameters controlled by simulated gametrak 
-// X dimension to formant freq
-// Y to SawOsc freq
-// Z to SawOsc gain
+// chuck gamelan.ck controller.ck
 
 Gamelan g;
 
-//SawOsc buzz => ResonZ f => NRev r => dac;
-// set filter Q
-//100 => f.Q;
-//r.mix(0.1);
-
-// spork control
 spork ~ gametrak();
-// print
 spork ~ print();
 
 // *** Constants
 
-200 => int basis;
-0.0013 => float velocityThreshold;
-(velocityThreshold * 0.1) => float velocityPeak;
+0.4 => float velocityPeak;
+0.2 => float threshold;
+200::ms => dur minDiff;
 
 // *** Main variables
 
 float gtXYAngle;
 float velocity;
 float distance;
-float gtAxisLast[6];
-float gtAxis[6];
-SinOsc axis[6];
-for( 0 => int i; i < 6; i++ ) {
-    axis[i] => blackhole;
-    axis[i].freq( 0.2 / (i+1)$float);
+// sentinel variable to tell us whether or not we've processed latest Hid events
+int processed;
+time lastStrike;
+
+// *** Gametrak handling
+
+class GameTrak {
+    time lastTime;
+    time currTime;
+    
+    float lastAxis[6];
+    float axis[6];
 }
 
-fun void print()
-{
-    while( true )
-    {
-        // values
-        //<<< "axes:", gtAxis[0],gtAxis[1],gtAxis[2], gtAxis[3],gtAxis[4],gtAxis[5] >>>;
-        <<< gtXYAngle >>>;
-        <<< velocity >>>;
-        
-        100::ms => now;
-    }
-}
+GameTrak gt;
 
-// 3-axis gametrack simulation
-fun void gametrak()
-{
-    while( true )
-    {
-        // wait on HidIn as event
-        basis::ms => now;
-        for( 0 => int which; which < 6; which++ )
-        {
-            // Save last
-            gtAxis[which] => gtAxisLast[which];
-   
-            axis[which].last() => float axisPosition;
-            
-            // the z axes map to [0,1], others map to [-1,1]
-            if( which != 2 && which != 5 )
-            { axisPosition => gtAxis[which]; }
-            else
-            {
-                1 - ((axisPosition + 1) / 2) => gtAxis[which];
-                if( gtAxis[which] < 0 ) 0 => gtAxis[which];
+// HID objects
+Hid trak;
+HidMsg msg;
+
+0 => int device;
+if( !trak.openJoystick( device ) ) me.exit();
+
+<<< "joystick '" + trak.name() + "' ready", "" >>>;
+
+fun void gametrak() {
+    while (true) {
+        trak => now;
+        0 => processed;
+        // messages received
+        while( trak.recv( msg ) ) {
+            // joystick axis motion
+            if( msg.isAxisMotion() ) {            
+                // check which
+                if( msg.which >= 0 && msg.which < 6 ) {
+                    // check if fresh
+                    if( now > gt.currTime ) {
+                        // time stamp
+                        gt.currTime => gt.lastTime;
+                        // set
+                        now => gt.currTime;
+                    }
+                    
+                    // save last
+                    gt.axis[msg.which] => gt.lastAxis[msg.which];
+                    // the z axes map to [0,1], others map to [-1,1]
+                    if( msg.which != 2 && msg.which != 5 ) {
+                        msg.axisPosition => gt.axis[msg.which];
+                    } else {
+                        1 - ((msg.axisPosition + 1) / 2) => gt.axis[msg.which];
+                        if( gt.axis[msg.which] < 0 ) 0 => gt.axis[msg.which];
+                    }
+                }
             }
         }
     }
 }
 
-// Control loop...
+
+fun void print() {
+    while(true) {
+        //<<< velocity >>>;
+        100::ms => now;
+    }
+}
+
+// Get angle of attack
+fun float angle(float x, float y) {
+    return Math.atan2(y, x) * (180 / Math.PI);
+}
+
+// Map coordinates to angle and pitch
+fun int pitch(float x, float y) {
+    angle(x, y) => float gtXYAngle;
+    
+    int pitch;
+    if (gtXYAngle >= 90 && gtXYAngle < 162) { 0 => pitch; }
+    else if (gtXYAngle >= 18 && gtXYAngle < 90) { 1 => pitch; }
+    else if (gtXYAngle >= -54 && gtXYAngle < 18) { 2 => pitch; }
+    else if (gtXYAngle >= -126 && gtXYAngle < -54) { 3 => pitch; }
+    else if (gtXYAngle >= 162 || gtXYAngle < -126) { 4 => pitch; }
+    else { <<< "Never reach here" >>>; }
+    
+    return pitch;
+}
+
+fun int octave(float x, float y) {
+    angle(x, y) => float gtXYAngle;
+    
+    int octave;
+    if (gtXYAngle >= 45 && gtXYAngle < 135) { 0 => octave; }
+    else if (gtXYAngle >= -45 && gtXYAngle < 45) { 1 => octave; }
+    else if (gtXYAngle >= -135 && gtXYAngle < -45) { 2 => octave; }
+    else if (gtXYAngle >= 135 || gtXYAngle < -135) { 3 => octave; }
+    else { <<< "Never reach here" >>>; }
+    
+    return octave;
+}
+
+fun float calculateVelocity() {
+    // Compute distance travelled
+    Math.pow((gt.axis[0] - gt.lastAxis[0]), 2) + Math.pow((gt.axis[1] - gt.lastAxis[1]), 2) => distance;
+    
+    // Squint and call that velocity
+    Math.sqrt(distance) => velocity;
+}
+
+// Main control loop
 while(true){
-    // Angle of attack
-    Math.atan(gtAxis[1] / gtAxis[0]) => gtXYAngle;
-    
-    // Convert from radians to degrees
-    Math.fabs(gtXYAngle * (180 / Math.PI)) => gtXYAngle;
-    
-    // Compute velocity of attack
-    Math.pow((gtAxis[0] - gtAxisLast[0]), 2) + Math.pow((gtAxis[1] - gtAxisLast[1]), 2) => distance;
-    Math.sqrt(distance) => distance;
-    distance / basis => velocity;
-    
-    // Strike
-    if (velocity > velocityThreshold) {
-        // Compute scale pitch based on angle of attach
-        gtXYAngle $ int / 18 => int pitch;
-        
-        int octave;
-        // Octave based on quadrant
-        if (gtAxis[0] < 0 && gtAxis[1] > 0)      { 4 => octave; }
-        else if (gtAxis[0] > 0 && gtAxis[1] > 0) { 3 => octave; }
-        else if (gtAxis[0] > 0 && gtAxis[1] < 0) { 2 => octave; }
-        else if (gtAxis[0] < 0 && gtAxis[1] < 0) { 1 => octave; }
-        else { <<< "Never reach here" >>>; }
-        
-        // Normalize velocity
-        (velocity - velocityThreshold) / velocityPeak => float normalized;
-        <<< "Striking", pitch, "at octave", octave, "with velocity", normalized >>>;
-        g.strike(pitch, octave, normalized);
+    calculateVelocity();
+
+    velocity / velocityPeak => float gain;
+
+     if (now - lastStrike >= minDiff && !processed && velocity > threshold) {
+        now => lastStrike;
+        1 => processed;
+        pitch(gt.axis[0], gt.axis[1]) => int pitch;
+        octave(gt.axis[3], gt.axis[4]) => int octave;
+         
+        <<< pitch, octave >>>;
+         
+        g.strike(pitch, octave, gain);
     }
     
     1::samp => now;

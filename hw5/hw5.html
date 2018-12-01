@@ -1,0 +1,58 @@
+
+
+<!--
+
+developed by Chris Chafe for Music 220a using code that is in 
+https://cdn.rawgit.com/google/songbird/master/examples/panner-node-vs-songbird.html
+which has this license:
+
+  Copyright 2017 Google Inc. All Rights Reserved.
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HW5</title>
+</head>
+<body>
+  <h1>Homework 5: Gametrack Gamelan</h1>
+  <h2>Overview</h2>
+  <p>
+    I built a Gamelan-inspired instrument using a Gametrak controller. The principle idea was to keep the controls as simple and intuitive as possible. To this effect the left axes control the pitch (in a pentatonic scale) and the right axes control the octave of the pitch (across four octaves). The velocity of attack (the gain of our instrument) is controlled by the velocity towards the pitch on the left controller.
+  </p>
+
+  <p>
+    One of the main challenges was properly tuning our instrument to something that played comfortably (and sounded good). In order to achieve this, we introduce hysterisis by requiring that a minimum time has elapsed before we re-strike the Gamelan in response to input. We only evaluate pitch and octave if we have new HID events, and we also require that the velocity exceed some threshold. It really feels like you're hitting a Gamelan!
+  </p>
+
+  <h2>Pitch Controls</h2>
+  <p>
+  <img src="hw5/pitch.jpg" width="50%" height="50%">
+  </p>
+
+  <h2>Octave Controls</h2>
+  <p>
+  <img src="hw5/octave.jpg" width="50%" height="50%">
+  </p>
+
+  <audio controls=""> <source src="hw5/gametrack_gamelan.wav" type="audio/mp3"> </audio>
+
+  <h2>Files</h2>
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw5/controller.ck">controller.ck</a></li>
+<li><a href="https://ccrma.stanford.edu/~jpl/220a/hw5/gamelan.ck">gamelan.ck</a></li>
+
+</body>
+</html>
+
+
