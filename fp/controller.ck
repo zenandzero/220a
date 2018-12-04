@@ -19,7 +19,6 @@ class Loop {
     string name;
     Event stopRec;
     Event stopPlay;
-    int stopped;
     
     fun void setNumber(int number) {
         "loop" + number => name;
@@ -35,8 +34,6 @@ class Loop {
         <<< "start rec" >>>;
         
         spork ~ goRecord();
-
-        
     }
     
     fun void stopRecording() {
@@ -49,25 +46,21 @@ class Loop {
     }
     
     fun void goPlay() {
-        while (!stopped) {
-            buf.length() / buf.rate() => now;
-        }
+        stopPlay => now;
     }
     
     fun void startPlaying() {
         buf => dac;
         name + ".wav" => buf.read;
         1 => buf.loop;
-        0 => stopped;
         
         spork ~ goPlay();
         <<< "Start", name >>>;
     }
     
     fun void stopPlaying() {
-        buf =< dac;
-        1 => stopped;
-        
+        buf =< dac;        
+        stopPlay.broadcast();
         <<< "Stop", name >>>;
     }
 }
