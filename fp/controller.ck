@@ -5,6 +5,8 @@ HidMsg msg;
 Event startRec;
 Event stopRec;
 
+adc => NRev r => Echo e => dac; 
+
 
 // open joystick 0, exit on fail
 if( !pedal.openKeyboard( 0 ) ) me.exit();
@@ -17,7 +19,7 @@ class Loop {
     WvOut w;
     SndBuf buf;
     string name;
-    Event stopRec;
+    Event stopRec2;
     Event stopPlay;
     
     fun void setNumber(int number) {
@@ -25,7 +27,7 @@ class Loop {
     }
     
     fun void goRecord() {
-        stopRec => now;
+        stopRec2 => now;
     }
     
     fun void startRecording() {
@@ -40,28 +42,40 @@ class Loop {
         adc =< w;
         name => w.closeFile;
         
-        stopRec.broadcast();
+        stopRec2.broadcast();
         
         <<< "stop rec" >>>;
     }
     
     fun void goPlay() {
-        stopPlay => now;
+      //  1 => buf.loop;
+       stopPlay => now;
+
+
     }
     
     fun void startPlaying() {
         buf => dac;
         name + ".wav" => buf.read;
-        1 => buf.loop;
-        
-        spork ~ goPlay();
-        <<< "Start", name >>>;
+          
+        <<< "Start playing", name >>>;
+       /* // time loop
+        while( true )
+        {
+            0 => buf.pos;
+            Math.random2f(.2,.5) => buf.gain;
+            Math.random2f(.5,1.5) => buf.rate;
+            1000::ms => now;
+            <<< "setting">>>;
+        }*/
+
+        spork ~ goPlay();        
     }
     
     fun void stopPlaying() {
         buf =< dac;        
         stopPlay.broadcast();
-        <<< "Stop", name >>>;
+        <<< "Stop playing", name >>>;
     }
 }
 
@@ -83,7 +97,7 @@ fun void loopController()
         
         newLoop.stopRecording();
         newLoop.startPlaying();
-        
+
     }
 }
 
@@ -121,4 +135,6 @@ fun void pedalMonitor()
 spork ~ pedalMonitor();
 spork ~ loopController();
 
-1::day => now;
+while (true) {
+	1::samp => now;
+}
