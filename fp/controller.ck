@@ -16,6 +16,7 @@ if( !pedal.openKeyboard( 0 ) ) me.exit();
 Loop @ loops[100];
 
 class Loop {
+    
     adc => LiSa looper;
     looper => Gain output;
     output => dac;
@@ -76,6 +77,11 @@ fun void loopController()
         now => time endTime;
 
         loop.stopRecording();
+        
+        Granular g;
+        loop.looper =< loop.output;
+        loop.looper => g.in;
+        g.out => loop.output;
                 
         spork ~ loop.startPlaying(endTime - startTime);
     }
