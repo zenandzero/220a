@@ -5,8 +5,7 @@ HidMsg msg;
 Event startRec;
 Event stopRec;
 
-adc => NRev r => Echo e => dac; 
-
+//adc => NRev r => Echo e => dac; 
 
 // open joystick 0, exit on fail
 if( !pedal.openKeyboard( 0 ) ) me.exit();
@@ -16,91 +15,64 @@ if( !pedal.openKeyboard( 0 ) ) me.exit();
 // * LOOP CONTROLLER
 
 class Loop {
-    WvOut w;
-    SndBuf buf;
-    string name;
-    Event stopRec2;
-    Event stopPlay;
+    adc => LiSa looper => Gain output => dac;
+    output.gain(1);
     
-    fun void setNumber(int number) {
-        "loop" + number => name;
-    }
+    10 => looper.maxVoices;
+    60::second => looper.duration;
     
-    fun void goRecord() {
-        stopRec2 => now;
-    }
+    <<<"buffer duration = ", looper.duration() / 48000.>>>;
     
     fun void startRecording() {
-        adc => w => blackhole;
-        name => w.wavFilename;
-        <<< "start rec" >>>;
-        
-        spork ~ goRecord();
+        looper.clear(); // maximum of 1 voice for now
+        1 => looper.record;
     }
     
     fun void stopRecording() {
-        adc =< w;
-        name => w.closeFile;
-        
-        stopRec2.broadcast();
-        
-        <<< "stop rec" >>>;
+        adc =< looper;
+        0 => looper.record;
     }
-    
-    fun void goPlay() {
-      //  1 => buf.loop;
-       stopPlay => now;
 
-
-    }
-    
-    fun void startPlaying() {
-        buf => dac;
-        name + ".wav" => buf.read;
-          
-        <<< "Start playing", name >>>;
-       /* // time loop
-        while( true )
-        {
-            0 => buf.pos;
-            Math.random2f(.2,.5) => buf.gain;
-            Math.random2f(.5,1.5) => buf.rate;
-            1000::ms => now;
-            <<< "setting">>>;
-        }*/
-
-        spork ~ goPlay();        
+    fun void startPlaying(dur duration) {        
+        looper.getVoice() => int voice;             
+        while (true) {
+            looper.rate(voice, 1);
+            looper.playPos(voice, 0::ms);
+            looper.play(voice, 1);
+            duration => now;
+        }
     }
     
     fun void stopPlaying() {
-        buf =< dac;        
-        stopPlay.broadcast();
-        <<< "Stop playing", name >>>;
+        output =< dac;
+        0 => looper.play;
     }
 }
 
 fun void loopController()
 {
     0 => int loopCount;
-    Loop @ group[1000];
+    Loop @ loops[100];
     while(true)
     {
         startRec => now;
+        now => time startTime;
       
-        Loop newLoop;
-        loopCount => newLoop.setNumber;
-        newLoop.startRecording();
+        Loop loop;
+        loop.startRecording();
         
+        <<< "Starting loop", loopCount >>>;
+        
+        loop @=> loops[loopCount];
         loopCount + 1 => loopCount;
         
         stopRec => now;
+        now => time endTime;
         
-        newLoop.stopRecording();
-        newLoop.startPlaying();
-
+        loop.stopRecording();
+        spork ~ loop.startPlaying(endTime - startTime);
     }
 }
-
 
 // * PEDAL MONITOR
 
@@ -114,7 +86,7 @@ fun void pedalMonitor()
         // messages received
         while( pedal.recv( msg ) )
         {
-            <<< msg, msg.which, msg.isButtonDown(), msg.isButtonUp() >>>;
+            //<<< msg, msg.which, msg.isButtonDown(), msg.isButtonUp() >>>;
             if(msg.isButtonDown())
             {
                 if (msg.which == 75) { // left pedal, start recording
@@ -135,6 +107,4 @@ fun void pedalMonitor()
 spork ~ pedalMonitor();
 spork ~ loopController();
 
-while (true) {
-	1::samp => now;
-}
+1::day => now;
