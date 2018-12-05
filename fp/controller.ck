@@ -16,7 +16,7 @@ if( !pedal.openKeyboard( 0 ) ) me.exit();
 Loop @ loops[100];
 
 class Loop {
-    adc => LiSa looper => Gain output => dac;
+    adc => LiSa looper => Gain output;
     output.gain(1);
     
     10 => looper.maxVoices;
@@ -32,6 +32,7 @@ class Loop {
     fun void stopRecording() {
         adc =< looper;
         0 => looper.record;
+        // looper.recRamp(100::ms);
     }
 
     fun void startPlaying(dur duration) {        
@@ -72,6 +73,9 @@ fun void loopController()
         now => time endTime;
         
         loop.stopRecording();
+        
+        loop.output => dac;
+        
         spork ~ loop.startPlaying(endTime - startTime);
     }
 }
