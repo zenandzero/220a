@@ -5,7 +5,22 @@ HidMsg msg;
 Event startRec;
 Event stopRec;
 
+
+/*adc => NRev r => Gain delete => dac;
+delete => DelayA delay => delete;
+
+0.05 => r.mix;
+
+3::second => dur d;
+
+d => delay.max;
+d => delay.delay;
+
+0.8 => delay.gain;
+//1::second => delay.max;
 //adc => NRev r => Echo e => dac; 
+*/
+adc => dac;
 
 if( !pedal.openKeyboard( 0 ) ) me.exit();
 
@@ -16,13 +31,12 @@ if( !pedal.openKeyboard( 0 ) ) me.exit();
 Loop @ loops[100];
 
 class Loop {
-    
     adc => LiSa looper;
     looper => Gain output;
-    output => dac;
+    output => NRev r => dac;
     
-    output.gain(1);
-    
+    r.mix(0.1);
+        
     10 => looper.maxVoices;
     60::second => looper.duration;
     
@@ -78,10 +92,13 @@ fun void loopController()
 
         loop.stopRecording();
         
+        /*
+        * 
         Granular g;
         loop.looper =< loop.output;
         loop.looper => g.in;
         g.out => loop.output;
+        */
                 
         spork ~ loop.startPlaying(endTime - startTime);
     }
