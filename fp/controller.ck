@@ -7,12 +7,13 @@ Event stopRec;
 
 //adc => NRev r => Echo e => dac; 
 
-// open joystick 0, exit on fail
 if( !pedal.openKeyboard( 0 ) ) me.exit();
 
 <<< "Pedal '" + pedal.name() + "' ready", "" >>>;
 
 // * LOOP CONTROLLER
+
+Loop @ loops[100];
 
 class Loop {
     adc => LiSa looper => Gain output => dac;
@@ -34,9 +35,11 @@ class Loop {
     }
 
     fun void startPlaying(dur duration) {        
-        looper.getVoice() => int voice;             
+        looper.getVoice() => int voice;    
+        
+        looper.rate(voice, 1);
+                 
         while (true) {
-            looper.rate(voice, 1);
             looper.playPos(voice, 0::ms);
             looper.play(voice, 1);
             duration => now;
@@ -52,7 +55,6 @@ class Loop {
 fun void loopController()
 {
     0 => int loopCount;
-    Loop @ loops[100];
     while(true)
     {
         startRec => now;
@@ -104,7 +106,22 @@ fun void pedalMonitor()
 
 // * START STUFF
 
+fun void increaseRate() {
+    while (true) {
+     loops[0].looper.rate() => float rate;
+     rate + .1 => loops[0].looper.rate;
+     
+     2::second => now;   
+    }
+}
+
 spork ~ pedalMonitor();
 spork ~ loopController();
+
+10::second => now;
+
+//spork ~ increaseRate();
+
+    
 
 1::day => now;
