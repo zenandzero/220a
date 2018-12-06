@@ -1,64 +1,67 @@
+// Constants
 
-Hid pedal;
-HidMsg msg;
+3.::second => dur DEFAULT_DELAY;
 
-Event startRec;
-Event stopRec;
+// Main monitor patch
 
+adc => NRev r => Gain output => dac;
+DelayA delay;
 
-/*adc => NRev r => Gain delete => dac;
-delete => DelayA delay => delete;
+r.mix(0.2);
 
-0.05 => r.mix;
-
-3::second => dur d;
-
-d => delay.max;
-d => delay.delay;
-
-0.8 => delay.gain;
-//1::second => delay.max;
-//adc => NRev r => Echo e => dac; 
-*/
-adc => dac;
-
-if( !pedal.openKeyboard( 0 ) ) me.exit();
-
-<<< "Pedal '" + pedal.name() + "' ready", "" >>>;
-
-// * LOOP CONTROLLER
-
-Loop @ loops[100];
-
+// Looping functionality
 class Loop {
-    adc => LiSa looper;
-    looper => Gain output;
-    output => NRev r => dac;
     
-    r.mix(0.1);
-        
+    // State & instance variables
+    int isRecording;
+    int isPlaying;
+    time startRecordingTime;
+    
+    // Patch
+    adc => LiSa looper => NRev r => Gain output => dac;
+    r.mix(0.01);
+    
+    // Effects (not wired into patch initially)
+    DelayA delay;
+    
+    // Configuration
     10 => looper.maxVoices;
     60::second => looper.duration;
-    
-    <<<"buffer duration = ", looper.duration() / 48000.>>>;
-    
+        
     fun void startRecording() {
-        looper.clear(); // maximum of 1 voice for now
-        1 => looper.record;
+        if (!isRecording) {
+            looper.clear(); // maximum of 1 voice for now
+            1 => looper.record;
+            1 => isRecording;
+            now => startRecordingTime;
+        } else {
+            <<< "Already recording" >>>;
+        }
     }
     
     fun void stopRecording() {
-        adc =< looper;
-        0 => looper.record;
-        // looper.recRamp(100::ms);
+        if (isRecording) {
+            0 => looper.record;
+            0 => isRecording;
+            spork ~ startPlaying(now - startRecordingTime);
+        } else {
+            <<< "Not recording" >>>;
+        }
     }
-
+    
+    fun void clearRecording() {
+        if (isPlaying) {
+            stopPlaying();
+        }
+        
+        looper.clear();
+    }
+    
     fun void startPlaying(dur duration) {        
         looper.getVoice() => int voice;    
-        
         looper.rate(voice, 1);
-                 
-        while (true) {
+        1 => isPlaying;
+        while (isPlaying) {
             looper.playPos(voice, 0::ms);
             looper.play(voice, 1);
             duration => now;
@@ -66,74 +69,122 @@ class Loop {
     }
     
     fun void stopPlaying() {
-        output =< dac;
-        0 => looper.play;
+        0 => isPlaying;
     }
 }
 
-fun void loopController()
-{
-    0 => int loopCount;
-    while(true)
-    {
-        startRec => now;
-        now => time startTime;
-      
-        Loop loop;
-        loop.startRecording();
-        
-        <<< "Starting loop", loopCount >>>;
-        
-        loop @=> loops[loopCount];
-        loopCount + 1 => loopCount;
-        
-        stopRec => now;
-        now => time endTime;
+class Controller {
+    Loop loops[9];
+    
+    PedalBoard board;
 
-        loop.stopRecording();
-        
-        /*
-        * 
-        Granular g;
-        loop.looper =< loop.output;
-        loop.looper => g.in;
-        g.out => loop.output;
-        */
-                
-        spork ~ loop.startPlaying(endTime - startTime);
+    int activePedal;
+    int activeTrack;
+    
+    fun void setup() {
+        board.setup();
+
+        spork ~ goPedal();
+        spork ~ goExpression();
     }
-}
-
-// * PEDAL MONITOR
-
-fun void pedalMonitor()
-{
-    while( true )
-    {
-        // wait on HidIn as event
-        pedal => now;
-
-        // messages received
-        while( pedal.recv( msg ) )
-        {
-            //<<< msg, msg.which, msg.isButtonDown(), msg.isButtonUp() >>>;
-            if(msg.isButtonDown())
-            {
-                if (msg.which == 75) { // left pedal, start recording
-                    <<< "start" >>>;
-                    startRec.broadcast();
-                } else if (msg.which == 78) { // right pedal, start recording
-                    <<< "stop" >>>;
-                    stopRec.broadcast();
-                }   
+    
+    fun void goPedal() {
+        while (true) {
+            board.pedalEvent => now;
+            
+            board.pedalEvent.pedal => activePedal;
+            board.pedalEvent.track => activeTrack;
+            
+            // First row of pedals controls looping...
+            //  *** Start recording
+            if (activePedal == 0) {
+                loops[activeTrack].startRecording();
+                <<< "Start recording", activeTrack >>>;
             }
             
+            // *** Stop recording
+            if (activePedal == 1) {
+                loops[activeTrack].stopRecording();
+                <<< "Stop recording", activeTrack >>>;
+            }
+            
+            // *** Clear recording
+            if (activePedal == 2) {
+                loops[activeTrack].clearRecording();
+                <<< "Clear recording", activeTrack >>>;
+            }
+            
+            // Second row of pedals controls looping...
+            // *** Granular sampling and synthesis
+            if (activePedal == 5) {
+                <<< "Granular", activeTrack >>>;
+            }
+            
+            // *** Delay
+            if (activePedal == 6) {
+                
+                // If we have a loop playing, change patch for looper
+                if (loops[activeTrack].isPlaying) {
+                    loops[activeTrack].output => loops[activeTrack].delay => loops[activeTrack].output;
+                    
+                    0.8 => delay.gain;
+
+                }
+                
+                // Otherwise, change direct adc => dac patch
+                if (!loops[activeTrack].isPlaying) {
+                    output => delay => output;
+                    
+                    0.8 => delay.gain;
+                                        
+                }
+                
+                DEFAULT_DELAY => delay.max;
+                DEFAULT_DELAY => delay.delay;
+                
+                <<< "Delay", activeTrack >>>;
+            }
+           
+        }
+    }
+    
+    fun void goExpression() {
+        while (true) {
+            board.expressionEvent => now;
+            
+            if (board.expressionEvent.pedal == 0) {
+                <<< "Gain ", board.expressionEvent.value >>>;
+                
+                
+                board.expressionEvent.value => output.gain;
+            }
+            
+            if (board.expressionEvent.pedal == 1) {
+                <<< "Control ", board.expressionEvent.value >>>;
+                
+                // *** Granular sampling and synthesis
+                if (activePedal == 5) {
+                    <<< "Granular", activeTrack >>>;
+                }
+                
+                // *** Delay
+                if (activePedal == 6) {
+                    
+                    DEFAULT_DELAY * board.expressionEvent.value => dur d;
+                    
+                    d => delay.max;
+                    d => delay.delay;
+                    
+                    <<< "Delay", d,  activeTrack >>>;
+                }
+                
+            }
         }
     }
 }
 
 // * START STUFF
-
+/*
 fun void increaseRate() {
     while (true) {
      loops[0].looper.rate() => float rate;
@@ -141,15 +192,10 @@ fun void increaseRate() {
      
      2::second => now;   
     }
-}
+}*/
 
-spork ~ pedalMonitor();
-spork ~ loopController();
+Controller c;
 
-10::second => now;
-
-//spork ~ increaseRate();
-
+c.setup();
     
-
 1::day => now;
