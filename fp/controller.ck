@@ -1,13 +1,18 @@
 // Constants
 
 3.::second => dur DEFAULT_DELAY;
+0.05 => float DEFAULT_REVERB;
+100::ms => dur DEFAULT_GRANULAR_DURATION;
 
 // Main monitor patch
 
 adc => NRev r => Gain output => dac;
-DelayA delay;
 
-r.mix(0.2);
+DelayA delay;
+Granular granular;
+
+DEFAULT_REVERB => r.mix;
+DEFAULT_GRANULAR_DURATION => granular.duration;
 
 // Looping functionality
 class Loop {
@@ -19,15 +24,21 @@ class Loop {
     
     // Patch
     adc => LiSa looper => NRev r => Gain output => dac;
-    r.mix(0.01);
     
     // Effects (not wired into patch initially)
     DelayA delay;
+    Granular granular;
     
-    // Configuration
+    // Setup
+    
+    DEFAULT_REVERB => r.mix;
+    DEFAULT_GRANULAR_DURATION => granular.duration;
+        
     10 => looper.maxVoices;
     60::second => looper.duration;
-        
+    
+    // Instance methods
+    
     fun void startRecording() {
         if (!isRecording) {
             looper.clear(); // maximum of 1 voice for now
@@ -52,6 +63,8 @@ class Loop {
     fun void clearRecording() {
         if (isPlaying) {
             stopPlaying();
+        } else {
+            <<< "Not playing" >>>;
         }
         
         looper.clear();
@@ -60,6 +73,7 @@ class Loop {
     fun void startPlaying(dur duration) {        
         looper.getVoice() => int voice;    
         looper.rate(voice, 1);
+        
         1 => isPlaying;
         while (isPlaying) {
             looper.playPos(voice, 0::ms);
@@ -77,13 +91,13 @@ class Controller {
     Loop loops[9];
     
     PedalBoard board;
-
+    
     int activePedal;
     int activeTrack;
     
     fun void setup() {
         board.setup();
-
+        
         spork ~ goPedal();
         spork ~ goExpression();
     }
@@ -114,21 +128,19 @@ class Controller {
                 <<< "Clear recording", activeTrack >>>;
             }
             
-            // Second row of pedals controls looping...
-            // *** Granular sampling and synthesis
+            // Second row of pedals controls effects...
+            // *** Clear patch (no effects)
             if (activePedal == 5) {
                 <<< "Granular", activeTrack >>>;
             }
             
             // *** Delay
             if (activePedal == 6) {
-                
                 // If we have a loop playing, change patch for looper
                 if (loops[activeTrack].isPlaying) {
                     loops[activeTrack].output => loops[activeTrack].delay => loops[activeTrack].output;
                     
-                    0.8 => delay.gain;
-
+                    0.8 => loops[activeTrack].delay.gain;
                 }
                 
                 // Otherwise, change direct adc => dac patch
@@ -136,7 +148,6 @@ class Controller {
                     output => delay => output;
                     
                     0.8 => delay.gain;
-                                        
                 }
                 
                 DEFAULT_DELAY => delay.max;
@@ -144,7 +155,34 @@ class Controller {
                 
                 <<< "Delay", activeTrack >>>;
             }
-           
+            
+            // *** Granular
+            if (activePedal == 7) {
+                // If we have a loop playing, change patch for looper
+                if (loops[activeTrack].isPlaying) {
+                    
+                    // Disconnect from dac
+                    loops[activeTrack].output =< dac;
+                    
+                    // Connect Granular I/O to rest of patch.
+                    loops[activeTrack].output => loops[activeTrack].granular.in; 
+                    loops[activeTrack].granular.out => dac;
+                    
+                }
+                
+                // Otherwise, change direct adc => dac patch
+                if (!loops[activeTrack].isPlaying) {
+                    // Disconnect from dac
+                    output =< dac;
+                    
+                    // Connect Granular I/O to rest of patch.
+                    output => granular.in;     
+                    granular.out => dac;                                    
+                    
+                }
+                
+                <<< "Granular", activeTrack >>>;
+            }
         }
     }
     
@@ -155,7 +193,7 @@ class Controller {
             if (board.expressionEvent.pedal == 0) {
                 <<< "Gain ", board.expressionEvent.value >>>;
                 
-                
+                // TODO: scale logarithmcally, set min and max
                 board.expressionEvent.value => output.gain;
             }
             
@@ -170,6 +208,7 @@ class Controller {
                 // *** Delay
                 if (activePedal == 6) {
                     
+                    // TODO: set min and max delays
                     DEFAULT_DELAY * board.expressionEvent.value => dur d;
                     
                     d => delay.max;
@@ -183,19 +222,9 @@ class Controller {
     }
 }
 
-// * START STUFF
-/*
-fun void increaseRate() {
-    while (true) {
-     loops[0].looper.rate() => float rate;
-     rate + .1 => loops[0].looper.rate;
-     
-     2::second => now;   
-    }
-}*/
 
 Controller c;
 
 c.setup();
-    
+
 1::day => now;

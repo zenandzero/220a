@@ -35,8 +35,11 @@ and all!).
 
 public class Granular {
 
+// Instance variables
+
 Gain in;
 Gain out;
+50::ms => dur duration;
 
 //transposition table
 [0, 4, 7, -2, 12, 15] @=> int pitchtable[];
@@ -83,10 +86,12 @@ spork ~ startGranular();
             
             Std.rand2f(0, 6) $ int => int newpitch; //choose a transposition from the table
             Std.mtof(pitchtable[newpitch] + 60)/Std.mtof(60) => float newrate;
-            Std.rand2f(50, 100) * 1::ms => dur newdur; //create a random duration for the grain
+            //Std.rand2f(50, 100) * 1::ms => dur newdur; //create a random duration for the grain
+            
+         //  <<< "Spork grain with duration", duration >>>;
             
             //spork off the grain!
-            spork ~ getgrain(playbuf, newdur, 20::ms, 20::ms, newrate);
+            spork ~ getgrain(playbuf, duration, 20::ms, 20::ms, newrate);
             
             //wait a bit.... then do it again, until we reach reclooplen
             5::ms => now;
@@ -109,7 +114,6 @@ spork ~ startGranular();
 fun void getgrain(int which, dur grainlen, dur rampup, dur rampdown, float rate)
 {
     l[which].getVoice() => int newvoice;
-    //<<<newvoice>>>;
     
     if(newvoice > -1) {
         l[which].rate(newvoice, rate);

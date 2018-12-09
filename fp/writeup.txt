@@ -1,5 +1,10 @@
 Avalokiteshvara
 
-Ternary form with coda into Lou Harrison composition
 
-Use WvOut to record loop when toggled, and SndBuf to play back with loop.
+
+
+
+Granular synthesis examples:
+
+https://ccrma.stanford.edu/wiki/MultiGrain_Granular_Synthesis_in_Chuck
+http://wiki.cs.princeton.edu/index.php/LiSa_examples
