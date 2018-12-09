@@ -44,14 +44,12 @@ class Loop {
     MAX_DELAY => delay.max;
     MAX_DELAY => delay.delay;
         
-    10 => looper.maxVoices;
+    200 => looper.maxVoices;
     60::second => looper.duration;
     
-    // Instance methods
-    
+    // Instance methods   
     fun void startRecording() {
         if (!isRecording) {
-            looper.clear(); // maximum of 1 voice for now
             1 => looper.record;
             1 => isRecording;
             now => startRecordingTime;
@@ -76,14 +74,13 @@ class Loop {
         } else {
             <<< "Not playing" >>>;
         }
-        
-        looper.clear();
     }
     
     fun void startPlaying(dur duration) {        
         looper.getVoice() => int voice;    
         looper.rate(voice, 1);
-        
+                
+        1 => looper.gain;
         1 => isPlaying;
         while (isPlaying) {
             looper.playPos(voice, 0::ms);
@@ -94,6 +91,7 @@ class Loop {
     
     fun void stopPlaying() {
         0 => isPlaying;
+        0 => looper.gain;
     }
 }
 
