@@ -1,17 +1,19 @@
 // Constants
 
-4.::second => dur MAX_DELAY;
-500::samp => dur MIN_DELAY;
-0.9 => float DEFAULT_DELAY_GAIN;
+4::second => dur MAX_DELAY;
+40::ms => dur MIN_DELAY;
+0.8 => float DEFAULT_DELAY_GAIN;
 
-0.01 => float DEFAULT_REVERB;
+0.02 => float DEFAULT_REVERB;
 
 150::ms => dur MAX_GRANULAR_DURATION;
 1::ms => dur MIN_GRANULAR_DURATION;
 
+9 => int LOOP_COUNT;
+
 // Main monitor patch
 
-adc => NRev r => Gain output => dac;
+adc => NRev r => Gain pre => Gain output => dac;
 
 DelayA delay;
 Granular granular;
@@ -24,13 +26,15 @@ MAX_DELAY => delay.delay;
 
 class Env {
     Step s => Envelope e => blackhole;
-    1::second => e.duration;
     fun void target(float val) { e.target(val); }
     fun void go(UGen output) {
-        while (true) {
+        now => time start;
+        while (now < start + e.duration()) {
             output.gain(e.last());
             1::samp => now;
         }
+        
+        <<< "End of crescendo" >>>;
     }
 }
 
@@ -42,6 +46,7 @@ class Loop {
     int isPlaying;
     time startRecordingTime;
     
+    Gain pre;
     Gain output;
     LiSa @ looper;
     
@@ -64,7 +69,7 @@ class Loop {
         
         DEFAULT_REVERB => reverb.mix;
         
-        adc => looper => reverb => output => dac;
+        adc => looper => reverb => pre => output => dac;
         200 => looper.maxVoices;
         60::second => looper.duration;
         60::second => looper.loopEndRec;
@@ -121,7 +126,7 @@ class Loop {
 }
 
 class Controller {
-    Loop loops[9];
+    Loop loops[LOOP_COUNT];
     
     PedalBoard board;
     
@@ -141,16 +146,16 @@ class Controller {
             loops[activeTrack].output =< loops[activeTrack].delay;
             loops[activeTrack].delay =< loops[activeTrack].output;
             
-            loops[activeTrack].output =< loops[activeTrack].granular.in; 
-            loops[activeTrack].granular.out =< dac;      
-            loops[activeTrack].output => dac;
+            loops[activeTrack].pre =< loops[activeTrack].granular.in; 
+            loops[activeTrack].granular.out =< loops[activeTrack].output;      
+            loops[activeTrack].pre => loops[activeTrack].output;
         } else {
             output =< delay;
             delay =< output; 
             
-            output =< granular.in;     
-            granular.out =< dac;  
-            output => dac;
+            pre =< granular.in;     
+            granular.out =< output;  
+            pre => output;
         }
                 
         <<< "Clear effects", activeTrack >>>;
@@ -213,41 +218,60 @@ class Controller {
             if (activePedal == 7) {                                
                 // If we have a loop playing, change patch for looper
                 if (loops[activeTrack].isPlaying) {
-                    // Disconnect from dac
-                    loops[activeTrack].output =< dac;
-                    loops[activeTrack].output =< loops[activeTrack].granular.in; 
-                    loops[activeTrack].granular.out =< dac;
+                    // Disconnect if already connected first...
+                    loops[activeTrack].pre =< loops[activeTrack].granular.in; 
+                    loops[activeTrack].granular.out =< loops[activeTrack].output;
 
                     // Connect Granular I/O to rest of patch
-                    loops[activeTrack].output => loops[activeTrack].granular.in; 
-                    loops[activeTrack].granular.out => dac;
+                    loops[activeTrack].pre =< loops[activeTrack].output; 
+                    loops[activeTrack].pre => loops[activeTrack].granular.in; 
+                    loops[activeTrack].granular.out => loops[activeTrack].output;
                 } else {
                     // Do the same for direct input
-                    output =< dac;
-                    output =< granular.in;     
-                    granular.out =< dac; 
+                    pre =< output;
+                    pre =< granular.in;     
+                    granular.out =< output; 
                     
-                    output => granular.in;     
-                    granular.out => dac;                                    
+                    pre => granular.in;     
+                    granular.out => output;                                    
                 }
                 
                 <<< "Set granular", activeTrack >>>;
             }
             
-            // *** Start crescendo on all tracks
+            // *** Start big crescendo on all tracks
             if (activePedal == 8) {
-                for (0 => int i; i <= 9; i++) {
+                for (0 => int i; i < LOOP_COUNT; i++) {
                     Env e;
-                    loops[i].output.gain() * 4 => e.target;
+                    1.5::minute => e.e.duration;
+                    loops[i].output.gain() => e.e.value;
+                    loops[i].output.gain() * 10 => e.target;
                     spork ~ e.go(loops[i].output);
                 }
+                
+                <<< "Start crescendo" >>>;
+            }
+            
+            // *** Start small crescendo on all tracks
+            if (activePedal == 4) {
+                for (0 => int i; i < LOOP_COUNT; i++) {
+                    Env e;
+                    10::second => e.e.duration;
+                    0 => e.e.value;
+                    0.2 => e.target;
+                    spork ~ e.go(loops[i].output);
+                }
+                
+                <<< "Start small crescendo" >>>;
             }
             
             // *** Mute all tracks
             if (activePedal == 9) {
-                for (0 => int i; i <= 9; i++) {
+                for (0 => int i; i < LOOP_COUNT; i++) {
                     0 => loops[i].output.gain;
                 }
+                
+                <<< "Mute" >>>;
             }
             
         }
@@ -259,21 +283,12 @@ class Controller {
             
             if (board.expressionEvent.pedal == 0) {
                 Math.pow(board.expressionEvent.value, 4.0) => float gain;
-                
-                if (loops[activeTrack].isPlaying) {
-                    gain => loops[activeTrack].output.gain;
-                }
-                
-                // Always modulate direct output
+                gain => loops[activeTrack].output.gain;
                 gain => output.gain;
-                
-                //<<< "Gain", gain >>>;
             }
             
             if (board.expressionEvent.pedal == 1) {
-                Math.pow(board.expressionEvent.value, 2.0) => float control;
-
-                //<<< "Control ", board.expressionEvent.value >>>;
+                Math.pow(board.expressionEvent.value, 4.0) => float control;
                 
                 // *** Delay
                 if (activePedal == 6) {
@@ -281,14 +296,14 @@ class Controller {
                     if (d < MIN_DELAY) {
                         MIN_DELAY => d;
                     }
-                    
+                                        
                     if (loops[activeTrack].isPlaying) {
                         d => loops[activeTrack].delay.delay;
                     } else {
                         d => delay.delay;
                     }
                     
-                    //<<< "Delay", d,  activeTrack >>>;
+                    <<< "Delay", d,  activeTrack >>>;
                 }
                 
                 // *** Granular sampling and synthesis
