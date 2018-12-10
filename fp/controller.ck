@@ -4,7 +4,7 @@
 500::samp => dur MIN_DELAY;
 0.5 => float DEFAULT_DELAY_GAIN;
 
-0.01 => float DEFAULT_REVERB;
+0.001 => float DEFAULT_REVERB;
 
 150::ms => dur MAX_GRANULAR_DURATION;
 1::ms => dur MIN_GRANULAR_DURATION;
@@ -30,22 +30,34 @@ class Loop {
     int isPlaying;
     time startRecordingTime;
     
-    // Patch
-    adc => LiSa looper => NRev r => Gain output => dac;
+    Gain output;
+    LiSa @ looper;
     
+    // Patch
+    resetPatch();
+
     // Effects (not wired into patch initially)
     DelayA delay;
     Granular granular;
     
     // Setup
-    DEFAULT_REVERB => r.mix;
     MAX_GRANULAR_DURATION => granular.duration;
     DEFAULT_DELAY_GAIN => delay.gain;
     MAX_DELAY => delay.max;
     MAX_DELAY => delay.delay;
         
-    200 => looper.maxVoices;
-    60::second => looper.duration;
+    fun void resetPatch() {
+        new LiSa @=> looper;
+        NRev reverb;
+        
+        DEFAULT_REVERB => r.mix;
+        
+        adc => looper => reverb => output => dac;
+        200 => looper.maxVoices;
+        60::second => looper.duration;
+        60::second => looper.loopEndRec;
+        looper.clear();
+    }
     
     // Instance methods   
     fun void startRecording() {
@@ -71,13 +83,14 @@ class Loop {
     fun void clearRecording() {
         if (isPlaying) {
             stopPlaying();
+            resetPatch();
         } else {
             <<< "Not playing" >>>;
         }
     }
     
     fun void startPlaying(dur duration) {        
-        looper.getVoice() => int voice;    
+        looper.getVoice() => int voice;
         looper.rate(voice, 1);
                 
         1 => looper.gain;
@@ -108,6 +121,27 @@ class Controller {
         
         spork ~ goPedal();
         spork ~ goExpression();
+    }
+    
+    fun void clearEffects(int activeTrack) {
+        // Clear delay and granular
+        if (loops[activeTrack].isPlaying) {
+            loops[activeTrack].output =< loops[activeTrack].delay;
+            loops[activeTrack].delay =< loops[activeTrack].output;
+            
+            loops[activeTrack].output =< loops[activeTrack].granular.in; 
+            loops[activeTrack].granular.out =< dac;      
+            loops[activeTrack].output => dac;
+        } else {
+            output =< delay;
+            delay =< output; 
+            
+            output =< granular.in;     
+            granular.out =< dac;  
+            output => dac;
+        }
+                
+        <<< "Clear effects", activeTrack >>>;
     }
     
     fun void goPedal() {
@@ -144,32 +178,19 @@ class Controller {
             // Second row of pedals controls effects...
             // *** Clear patch (no effects)
             if (activePedal == 5) {
-                // Clear delay and granular
-                if (loops[activeTrack].isPlaying) {
-                    loops[activeTrack].output =< loops[activeTrack].delay;
-                    loops[activeTrack].delay =< loops[activeTrack].output;
-                    
-                    loops[activeTrack].output =< loops[activeTrack].granular.in; 
-                    loops[activeTrack].granular.out =< dac;      
-                    loops[activeTrack].output => dac;
-                } else {
-                    output =< delay;
-                    delay =< output; 
-                    
-                    output => dac;
-                    output =< granular.in;     
-                    granular.out =< dac;  
-                }
-                                
-                <<< "Clear effects", activeTrack >>>;
+                clearEffects(activeTrack);
             }
             
             // *** Delay
             if (activePedal == 6) {
                 // If we have a loop playing, change patch for looper
                 if (loops[activeTrack].isPlaying) {
+                    // Disconnect if already connected first...
+                    loops[activeTrack].output =< loops[activeTrack].delay =< loops[activeTrack].output;
                     loops[activeTrack].output => loops[activeTrack].delay => loops[activeTrack].output;
                 } else {
+                    // Disconnect if already connected first...
+                    output =< delay =< output;
                     output => delay => output;
                 }
                                 
@@ -177,18 +198,23 @@ class Controller {
             }
             
             // *** Granular
-            if (activePedal == 7) {
+            if (activePedal == 7) {                                
                 // If we have a loop playing, change patch for looper
                 if (loops[activeTrack].isPlaying) {
                     // Disconnect from dac
                     loops[activeTrack].output =< dac;
-                    
+                    loops[activeTrack].output =< loops[activeTrack].granular.in; 
+                    loops[activeTrack].granular.out =< dac;
+
                     // Connect Granular I/O to rest of patch
                     loops[activeTrack].output => loops[activeTrack].granular.in; 
                     loops[activeTrack].granular.out => dac;
                 } else {
                     // Do the same for direct input
                     output =< dac;
+                    output =< granular.in;     
+                    granular.out =< dac; 
+                    
                     output => granular.in;     
                     granular.out => dac;                                    
                 }
@@ -255,7 +281,6 @@ class Controller {
         }
     }
 }
-
 
 Controller c;
 

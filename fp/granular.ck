@@ -33,14 +33,14 @@ public class Granular {
         while(true) {
             now + reclooplen => time later;
 
-            while (now<later) {
+            while (now < later) {
                 spork ~ getgrain(playbuf, duration);
                 2::ms => now;
             }
             
             // Rotate buffers
             l[recbuf++].record(0);
-            if(recbuf == 3) 0 => recbuf;
+            if (recbuf == 3) 0 => recbuf;
             l[recbuf].record(1);
             
             playbuf++;
