@@ -2,9 +2,9 @@
 
 4.::second => dur MAX_DELAY;
 500::samp => dur MIN_DELAY;
-0.5 => float DEFAULT_DELAY_GAIN;
+0.9 => float DEFAULT_DELAY_GAIN;
 
-0.001 => float DEFAULT_REVERB;
+0.01 => float DEFAULT_REVERB;
 
 150::ms => dur MAX_GRANULAR_DURATION;
 1::ms => dur MIN_GRANULAR_DURATION;
@@ -21,6 +21,18 @@ MAX_GRANULAR_DURATION => granular.duration;
 DEFAULT_DELAY_GAIN => delay.gain;
 MAX_DELAY => delay.max;
 MAX_DELAY => delay.delay;
+
+class Env {
+    Step s => Envelope e => blackhole;
+    1::second => e.duration;
+    fun void target(float val) { e.target(val); }
+    fun void go(UGen output) {
+        while (true) {
+            output.gain(e.last());
+            1::samp => now;
+        }
+    }
+}
 
 // Looping functionality
 class Loop {
@@ -50,7 +62,7 @@ class Loop {
         new LiSa @=> looper;
         NRev reverb;
         
-        DEFAULT_REVERB => r.mix;
+        DEFAULT_REVERB => reverb.mix;
         
         adc => looper => reverb => output => dac;
         200 => looper.maxVoices;
@@ -174,7 +186,7 @@ class Controller {
             if (activePedal == 3) {
                 <<< "Active track", activeTrack >>>;
             }
-                        
+                      
             // Second row of pedals controls effects...
             // *** Clear patch (no effects)
             if (activePedal == 5) {
@@ -221,6 +233,23 @@ class Controller {
                 
                 <<< "Set granular", activeTrack >>>;
             }
+            
+            // *** Start crescendo on all tracks
+            if (activePedal == 8) {
+                for (0 => int i; i <= 9; i++) {
+                    Env e;
+                    loops[i].output.gain() * 4 => e.target;
+                    spork ~ e.go(loops[i].output);
+                }
+            }
+            
+            // *** Mute all tracks
+            if (activePedal == 9) {
+                for (0 => int i; i <= 9; i++) {
+                    0 => loops[i].output.gain;
+                }
+            }
+            
         }
     }
     
