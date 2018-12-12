@@ -1,3 +1,5 @@
+// chuck expression_pedal_event.ck pedal_event.ck pedal.ck granular.ck controller.ck rec.ck 
+//
 // Constants
 
 0.1 => float DEFAULT_GAIN;
@@ -13,7 +15,7 @@ DEFAULT_GAIN => float START_BIG_CRESCENDO;
 END_BIG_CRESCENDO => float START_SMALL_DECRESCENDO_FIRST;
 END_SMALL_CRESCENDO => float START_SMALL_DECRESCENDO_SECOND;
 0.0 => float END_SMALL_DECRESCENDO;
-10::second => dur DUR_SMALL_DECRESCENDO;
+30::second => dur DUR_SMALL_DECRESCENDO;
 
 500::ms => dur MAX_DELAY;
 50::ms => dur MIN_DELAY;
@@ -145,8 +147,9 @@ class Controller {
         board.setup();
         
         loops[0].setupLoop("loop0-mono.wav");
-        //loops[1].setupLoop("loop1.wav");
-        //loops[2].setupLoop("loop2.wav");
+        loops[1].setupLoop("loop0-mono.wav");
+        loops[2].setupLoop("loop0-mono.wav");
+        loops[3].setupLoop("loop0-mono.wav");
         
         spork ~ goPedal();
         spork ~ goExpression();
@@ -195,7 +198,7 @@ class Controller {
             
             // *** Start big crescendo on all tracks
             if (activePedal == 2) {
-                for (0 => int i; i < LOOP_COUNT; i++) {
+                for (0 => int i; i < 3; i++) {
                     Env e;
                     
                     DUR_BIG_CRESCENDO => e.duration;
@@ -212,7 +215,7 @@ class Controller {
             
             // *** Start small crescendo on all tracks
             if (activePedal == 3) {
-                for (0 => int i; i < LOOP_COUNT; i++) {
+                for (0 => int i; i < 3; i++) {
                     Env e;
                     
                     DUR_SMALL_CRESCENDO => e.duration;
@@ -296,6 +299,11 @@ class Controller {
                 }
                 
                 <<< "Set granular", activeTrack >>>;
+            }
+            
+            // *** Track Select
+            if (activePedal == 9) {
+                <<< "Selected track", activeTrack >>>;
             }
         }
     }
