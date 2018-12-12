@@ -243,7 +243,7 @@ class Controller {
             if (activePedal == 8) {
                 for (0 => int i; i < LOOP_COUNT; i++) {
                     Env e;
-                    1.5::minute => e.e.duration;
+                    0.5::minute => e.e.duration;
                     loops[i].output.gain() => e.e.value;
                     loops[i].output.gain() * 10 => e.target;
                     spork ~ e.go(loops[i].output);
