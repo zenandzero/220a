@@ -1,13 +1,29 @@
 // Constants
 
-4::second => dur MAX_DELAY;
-40::ms => dur MIN_DELAY;
+0.1 => float DEFAULT_GAIN;
+
+0.0 => float START_SMALL_CRESCENDO;
+0.2 => float END_SMALL_CRESCENDO;
+10::second => dur DUR_SMALL_CRESCENDO;
+
+DEFAULT_GAIN => float START_BIG_CRESCENDO;
+0.8 => float END_BIG_CRESCENDO;
+30::second => dur DUR_BIG_CRESCENDO;
+
+END_BIG_CRESCENDO => float START_SMALL_DECRESCENDO_FIRST;
+END_SMALL_CRESCENDO => float START_SMALL_DECRESCENDO_SECOND;
+0.0 => float END_SMALL_DECRESCENDO;
+10::second => dur DUR_SMALL_DECRESCENDO;
+
+500::ms => dur MAX_DELAY;
+50::ms => dur MIN_DELAY;
 0.8 => float DEFAULT_DELAY_GAIN;
 
 0.02 => float DEFAULT_REVERB;
 
 150::ms => dur MAX_GRANULAR_DURATION;
 1::ms => dur MIN_GRANULAR_DURATION;
+0.1 => float DEFAULT_GRANULAR_GAIN;
 
 9 => int LOOP_COUNT;
 
@@ -18,23 +34,45 @@ adc => NRev r => Gain pre => Gain output => dac;
 DelayA delay;
 Granular granular;
 
+// Other globals
+
+0 => int didBigCrescendo;
+
+// Set constants
+
 DEFAULT_REVERB => r.mix;
 MAX_GRANULAR_DURATION => granular.duration;
+DEFAULT_GRANULAR_GAIN => granular.out.gain;
 DEFAULT_DELAY_GAIN => delay.gain;
 MAX_DELAY => delay.max;
-MAX_DELAY => delay.delay;
+MIN_DELAY => delay.delay;
+
+
+DEFAULT_GAIN => output.gain;
 
 class Env {
     Step s => Envelope e => blackhole;
+    fun void duration(dur duration) { e.duration(duration); }
+    fun void value(float val) { e.value(val); }
     fun void target(float val) { e.target(val); }
+    
+    fun void countdown(time start) {
+        0 => int secondCount;
+        while (now < start + e.duration()) {
+            <<< secondCount++ >>>;
+            1::second => now;
+        }
+    }
+    
     fun void go(UGen output) {
         now => time start;
+        spork ~ countdown(start);
         while (now < start + e.duration()) {
             output.gain(e.last());
             1::samp => now;
         }
         
-        <<< "End of crescendo" >>>;
+        <<< "Done with envelope" >>>;
     }
 }
 
@@ -48,80 +86,50 @@ class Loop {
     
     Gain pre;
     Gain output;
-    LiSa @ looper;
-    
-    // Patch
-    resetPatch();
+    LiSa looper;
+    SndBuf buf;
 
     // Effects (not wired into patch initially)
     DelayA delay;
     Granular granular;
+    NRev reverb;
+    
+    // Patch
+    looper => reverb => pre => output => dac;
     
     // Setup
+    DEFAULT_REVERB => reverb.mix;
     MAX_GRANULAR_DURATION => granular.duration;
+    DEFAULT_GRANULAR_GAIN => granular.out.gain;
     DEFAULT_DELAY_GAIN => delay.gain;
     MAX_DELAY => delay.max;
     MAX_DELAY => delay.delay;
+    DEFAULT_GAIN => output.gain;
         
-    fun void resetPatch() {
-        new LiSa @=> looper;
-        NRev reverb;
+    fun void setupLoop(string filename) {
+        filename => buf.read;
         
-        DEFAULT_REVERB => reverb.mix;
-        
-        adc => looper => reverb => pre => output => dac;
-        200 => looper.maxVoices;
-        60::second => looper.duration;
-        60::second => looper.loopEndRec;
-        looper.clear();
-    }
-    
-    // Instance methods   
-    fun void startRecording() {
-        if (!isRecording) {
-            1 => looper.record;
-            1 => isRecording;
-            now => startRecordingTime;
-        } else {
-            <<< "Already recording" >>>;
-        }
-    }
-    
-    fun void stopRecording() {
-        if (isRecording) {
-            0 => looper.record;
-            0 => isRecording;
-            spork ~ startPlaying(now - startRecordingTime);
-        } else {
-            <<< "Not recording" >>>;
-        }
-    }
-    
-    fun void clearRecording() {
-        if (isPlaying) {
-            stopPlaying();
-            resetPatch();
-        } else {
-            <<< "Not playing" >>>;
-        }
-    }
-    
-    fun void startPlaying(dur duration) {        
-        looper.getVoice() => int voice;
-        looper.rate(voice, 1);
+        // Set LiSa buffer size to sample size
+        buf.samples() * 1::samp => looper.duration;
                 
-        1 => looper.gain;
+        // Transfer values from SndBuf to LiSa
+        for (0 => int i; i < buf.samples(); i++) {
+            looper.valueAt(buf.valueAt(i), i::samp);
+        }
+    }
+    
+    // Instance methods
+    fun void startPlaying() {
         1 => isPlaying;
         while (isPlaying) {
-            looper.playPos(voice, 0::ms);
-            looper.play(voice, 1);
-            duration => now;
+            1 => looper.play;
+            looper.duration() => now;
         }
     }
     
     fun void stopPlaying() {
         0 => isPlaying;
-        0 => looper.gain;
+        0 => looper.play;
     }
 }
 
@@ -135,6 +143,10 @@ class Controller {
     
     fun void setup() {
         board.setup();
+        
+        loops[0].setupLoop("loop0-mono.wav");
+        //loops[1].setupLoop("loop1.wav");
+        //loops[2].setupLoop("loop2.wav");
         
         spork ~ goPedal();
         spork ~ goExpression();
@@ -169,27 +181,73 @@ class Controller {
             board.pedalEvent.track => activeTrack;
             
             // First row of pedals controls looping...
-            //  *** Start recording
+            //  *** Start playing
             if (activePedal == 0) {
-                loops[activeTrack].startRecording();
-                <<< "Start recording", activeTrack >>>;
+                spork ~ loops[activeTrack].startPlaying();
+                <<< "Start playing", activeTrack >>>;
             }
             
-            // *** Stop recording
+            // *** Stop playing
             if (activePedal == 1) {
-                loops[activeTrack].stopRecording();
-                <<< "Stop recording", activeTrack >>>;
+                loops[activeTrack].stopPlaying();
+                <<< "Stop playing", activeTrack >>>;
             }
             
-            // *** Clear recording
+            // *** Start big crescendo on all tracks
             if (activePedal == 2) {
-                loops[activeTrack].clearRecording();
-                <<< "Clear recording", activeTrack >>>;
+                for (0 => int i; i < LOOP_COUNT; i++) {
+                    Env e;
+                    
+                    DUR_BIG_CRESCENDO => e.duration;
+                    START_BIG_CRESCENDO => e.value;
+                    END_BIG_CRESCENDO => e.target;
+                    
+                    spork ~ e.go(loops[i].output);
+                }
+                
+                1 => didBigCrescendo;
+                
+                <<< "Start crescendo" >>>;
             }
             
-            // *** Set active track
+            // *** Start small crescendo on all tracks
             if (activePedal == 3) {
-                <<< "Active track", activeTrack >>>;
+                for (0 => int i; i < LOOP_COUNT; i++) {
+                    Env e;
+                    
+                    DUR_SMALL_CRESCENDO => e.duration;
+                    START_SMALL_CRESCENDO => e.value;
+                    END_SMALL_CRESCENDO => e.target;
+                    
+                    spork ~ e.go(loops[i].output);
+                }
+                
+                0 => didBigCrescendo;
+                
+                <<< "Start small crescendo" >>>;
+            }
+            
+            // *** Start decrescendo on all tracks
+            if (activePedal == 4) {
+                for (0 => int i; i < LOOP_COUNT; i++) {
+                    Env e;
+                    
+                    DUR_SMALL_DECRESCENDO => e.duration;
+                    
+                    if (didBigCrescendo) {
+                        <<< "Big" >>>;
+                        START_SMALL_DECRESCENDO_FIRST => e.value;
+                    } else {
+                        <<< "Small" >>>;
+                        START_SMALL_DECRESCENDO_SECOND => e.value;
+                    }
+                    
+                    END_SMALL_DECRESCENDO => e.target;
+                    
+                    spork ~ e.go(loops[i].output);
+                }
+                
+                <<< "Start descrescendo" >>>;
             }
                       
             // Second row of pedals controls effects...
@@ -218,6 +276,7 @@ class Controller {
             if (activePedal == 7) {                                
                 // If we have a loop playing, change patch for looper
                 if (loops[activeTrack].isPlaying) {
+                    <<< "SEtting on track" >>>;
                     // Disconnect if already connected first...
                     loops[activeTrack].pre =< loops[activeTrack].granular.in; 
                     loops[activeTrack].granular.out =< loops[activeTrack].output;
@@ -228,52 +287,16 @@ class Controller {
                     loops[activeTrack].granular.out => loops[activeTrack].output;
                 } else {
                     // Do the same for direct input
-                    pre =< output;
                     pre =< granular.in;     
                     granular.out =< output; 
                     
+                    pre =< output;
                     pre => granular.in;     
                     granular.out => output;                                    
                 }
                 
                 <<< "Set granular", activeTrack >>>;
             }
-            
-            // *** Start big crescendo on all tracks
-            if (activePedal == 8) {
-                for (0 => int i; i < LOOP_COUNT; i++) {
-                    Env e;
-                    0.5::minute => e.e.duration;
-                    loops[i].output.gain() => e.e.value;
-                    loops[i].output.gain() * 10 => e.target;
-                    spork ~ e.go(loops[i].output);
-                }
-                
-                <<< "Start crescendo" >>>;
-            }
-            
-            // *** Start small crescendo on all tracks
-            if (activePedal == 4) {
-                for (0 => int i; i < LOOP_COUNT; i++) {
-                    Env e;
-                    10::second => e.e.duration;
-                    0 => e.e.value;
-                    0.2 => e.target;
-                    spork ~ e.go(loops[i].output);
-                }
-                
-                <<< "Start small crescendo" >>>;
-            }
-            
-            // *** Mute all tracks
-            if (activePedal == 9) {
-                for (0 => int i; i < LOOP_COUNT; i++) {
-                    0 => loops[i].output.gain;
-                }
-                
-                <<< "Mute" >>>;
-            }
-            
         }
     }
     
@@ -291,36 +314,30 @@ class Controller {
                 Math.pow(board.expressionEvent.value, 4.0) => float control;
                 
                 // *** Delay
-                if (activePedal == 6) {
-                    MAX_DELAY * control => dur d;
-                    if (d < MIN_DELAY) {
-                        MIN_DELAY => d;
-                    }
-                                        
-                    if (loops[activeTrack].isPlaying) {
-                        d => loops[activeTrack].delay.delay;
-                    } else {
-                        d => delay.delay;
-                    }
-                    
-                    <<< "Delay", d,  activeTrack >>>;
+                MAX_DELAY * control => dur d;
+                if (d < MIN_DELAY) {
+                    MIN_DELAY => d;
                 }
                 
+                if (loops[activeTrack].isPlaying) {
+                    d => loops[activeTrack].delay.delay;
+                } else {
+                    d => delay.delay;
+                }
+                <<< "Delay", d,  activeTrack >>>;
+                
                 // *** Granular sampling and synthesis
-                if (activePedal == 7) {
-                    MAX_GRANULAR_DURATION * control => dur d;
-                    if (d < MIN_GRANULAR_DURATION) {
-                        MIN_GRANULAR_DURATION => d;
-                    }
-                    
-                    if (loops[activeTrack].isPlaying) {
-                        d => loops[activeTrack].granular.duration;
-                    } else {
-                        d => granular.duration;
-                    }
-                    
-                    <<< "Granular", d, activeTrack >>>;
-                }                
+                MAX_GRANULAR_DURATION * control => d;
+                if (d < MIN_GRANULAR_DURATION) {
+                    MIN_GRANULAR_DURATION => d;
+                }
+                
+                if (loops[activeTrack].isPlaying) {
+                    d => loops[activeTrack].granular.duration;
+                } else {
+                    d => granular.duration;
+                }
+                <<< "Granular", d, activeTrack >>>;
             }
         }
     }
