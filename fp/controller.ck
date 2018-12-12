@@ -2,14 +2,14 @@
 //
 // Constants
 
-0.1 => float DEFAULT_GAIN;
+0.05 => float DEFAULT_GAIN;
 
 0.0 => float START_SMALL_CRESCENDO;
-0.2 => float END_SMALL_CRESCENDO;
+DEFAULT_GAIN => float END_SMALL_CRESCENDO;
 10::second => dur DUR_SMALL_CRESCENDO;
 
 DEFAULT_GAIN => float START_BIG_CRESCENDO;
-0.8 => float END_BIG_CRESCENDO;
+0.4 => float END_BIG_CRESCENDO;
 30::second => dur DUR_BIG_CRESCENDO;
 
 END_BIG_CRESCENDO => float START_SMALL_DECRESCENDO_FIRST;
@@ -147,8 +147,8 @@ class Controller {
         board.setup();
         
         loops[0].setupLoop("loop0-mono.wav");
-        loops[1].setupLoop("loop0-mono.wav");
-        loops[2].setupLoop("loop0-mono.wav");
+        loops[1].setupLoop("loop1-mono.wav");
+        loops[2].setupLoop("loop2-mono.wav");
         loops[3].setupLoop("loop0-mono.wav");
         
         spork ~ goPedal();
