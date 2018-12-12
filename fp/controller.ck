@@ -5,8 +5,8 @@
 0.05 => float DEFAULT_GAIN;
 
 0.0 => float START_SMALL_CRESCENDO;
-DEFAULT_GAIN => float END_SMALL_CRESCENDO;
-10::second => dur DUR_SMALL_CRESCENDO;
+DEFAULT_GAIN * 4 => float END_SMALL_CRESCENDO;
+1::minute => dur DUR_SMALL_CRESCENDO;
 
 DEFAULT_GAIN => float START_BIG_CRESCENDO;
 0.4 => float END_BIG_CRESCENDO;
@@ -18,8 +18,8 @@ END_SMALL_CRESCENDO => float START_SMALL_DECRESCENDO_SECOND;
 30::second => dur DUR_SMALL_DECRESCENDO;
 
 500::ms => dur MAX_DELAY;
-50::ms => dur MIN_DELAY;
-0.8 => float DEFAULT_DELAY_GAIN;
+250::ms => dur MIN_DELAY;
+0.95 => float DEFAULT_DELAY_GAIN;
 
 0.02 => float DEFAULT_REVERB;
 
@@ -49,8 +49,7 @@ DEFAULT_DELAY_GAIN => delay.gain;
 MAX_DELAY => delay.max;
 MIN_DELAY => delay.delay;
 
-
-DEFAULT_GAIN => output.gain;
+DEFAULT_GAIN * 2 => output.gain;
 
 class Env {
     Step s => Envelope e => blackhole;
@@ -332,7 +331,7 @@ class Controller {
                 } else {
                     d => delay.delay;
                 }
-                <<< "Delay", d,  activeTrack >>>;
+                //<<< "Delay", d,  activeTrack >>>;
                 
                 // *** Granular sampling and synthesis
                 MAX_GRANULAR_DURATION * control => d;
@@ -345,7 +344,7 @@ class Controller {
                 } else {
                     d => granular.duration;
                 }
-                <<< "Granular", d, activeTrack >>>;
+                //<<< "Granular", d, activeTrack >>>;
             }
         }
     }
